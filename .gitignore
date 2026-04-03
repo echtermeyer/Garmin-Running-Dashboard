@@ -1,0 +1,7 @@
+.env
+.env.local
+.garmin-tokens.json
+node_modules/
+.next/
+.DS_Store
+Activities*.csv
