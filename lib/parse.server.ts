@@ -46,9 +46,9 @@ function parseDateStr(datum: string): string {
 // Running activity type names in German Garmin exports
 const RUNNING_TYPES = new Set(['Laufen', 'Trailrunning', 'Laufband', 'Hindernislauf', 'Ultramarathon'])
 
-export function getRuns(): Run[] {
+export function getRuns(csvFile: string): Run[] {
   try {
-    const csvPath = path.join(process.cwd(), 'Activities.csv')
+    const csvPath = path.join(process.cwd(), csvFile)
     const raw = fs.readFileSync(csvPath, 'utf-8')
     // Strip BOM if present
     const content = raw.replace(/^\uFEFF/, '')
