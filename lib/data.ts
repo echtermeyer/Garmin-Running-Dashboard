@@ -127,6 +127,11 @@ export function computeMonthlyVolume(runs: Run[]): WeeklyVolume[] {
   return result
 }
 
+export function computeCustomRangeVolume(runs: Run[], start: string, end: string): WeeklyVolume[] {
+  // Use monthly buckets (same as all-time view)
+  return computeMonthlyVolume(runs.filter((r) => r.dateStr >= start && r.dateStr <= end))
+}
+
 export function computeRunsByDate(runs: Run[]): Record<string, number> {
   const map: Record<string, number> = {}
   for (const run of runs) {

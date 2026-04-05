@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import KpiCards from './KpiCards'
 import YearHeatmap from './YearHeatmap'
 import WeeklyVolumeChart from './WeeklyVolumeChart'
 import AerobicScatter from './AerobicScatter'
 import HRZoneChart from './HRZoneChart'
 import PaceTrendChart from './PaceTrendChart'
-import { computeWeeklyVolume, computeMonthlyVolume, computeRunsByDate, type Run } from '@/lib/data'
+import { computeWeeklyVolume, computeMonthlyVolume, computeCustomRangeVolume, computeRunsByDate, type Run } from '@/lib/data'
 
 interface Props {
   allRuns: Run[]
@@ -34,27 +34,58 @@ export default function Dashboard({ allRuns }: Props) {
     parseInt(defaultRange) || new Date().getFullYear()
   )
 
+  // Custom date range state
+  const [showCustomPicker, setShowCustomPicker] = useState(false)
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [appliedCustomStart, setAppliedCustomStart] = useState('')
+  const [appliedCustomEnd, setAppliedCustomEnd] = useState('')
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    if (!showCustomPicker) return
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowCustomPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showCustomPicker])
+
   const handleRangeChange = (year: string) => {
     setFilterYear(year)
+    setShowCustomPicker(false)
     if (year !== 'all') setHeatmapYear(parseInt(year))
   }
 
-  const filteredRuns = useMemo(
-    () => (filterYear === 'all' ? allRuns : allRuns.filter((r) => r.dateStr.startsWith(filterYear))),
-    [allRuns, filterYear]
-  )
+  const handleApplyCustomRange = () => {
+    if (!customStart || !customEnd) return
+    setAppliedCustomStart(customStart)
+    setAppliedCustomEnd(customEnd)
+    setFilterYear('custom')
+    setShowCustomPicker(false)
+  }
+
+  const filteredRuns = useMemo(() => {
+    if (filterYear === 'all') return allRuns
+    if (filterYear === 'custom' && appliedCustomStart && appliedCustomEnd) {
+      return allRuns.filter((r) => r.dateStr >= appliedCustomStart && r.dateStr <= appliedCustomEnd)
+    }
+    return allRuns.filter((r) => r.dateStr.startsWith(filterYear))
+  }, [allRuns, filterYear, appliedCustomStart, appliedCustomEnd])
 
   const totalDistance = useMemo(
     () => filteredRuns.reduce((s, r) => s + r.distance, 0),
     [filteredRuns]
   )
-  const volumeData = useMemo(
-    () => filterYear === 'all'
-      ? computeMonthlyVolume(filteredRuns)
-      : computeWeeklyVolume(filteredRuns, { fillYear: parseInt(filterYear) }),
-    [filteredRuns, filterYear]
-  )
-  const volumeTitle = filterYear === 'all' ? 'Monthly Volume' : 'Weekly Volume'
+  const volumeData = useMemo(() => {
+    if (filterYear === 'all') return computeMonthlyVolume(filteredRuns)
+    if (filterYear === 'custom') return computeCustomRangeVolume(filteredRuns, appliedCustomStart, appliedCustomEnd)
+    return computeWeeklyVolume(filteredRuns, { fillYear: parseInt(filterYear) })
+  }, [filteredRuns, filterYear, appliedCustomStart, appliedCustomEnd])
+  const volumeTitle = filterYear === 'all' ? 'Monthly Volume' : filterYear === 'custom' ? 'Volume' : 'Weekly Volume'
   // Heatmap always shows all-time data regardless of filter
   const runsByDate = useMemo(() => computeRunsByDate(allRuns), [allRuns])
 
@@ -62,6 +93,10 @@ export default function Dashboard({ allRuns }: Props) {
     ...years.map((y) => ({ value: y, label: y })),
     { value: 'all', label: 'All time' },
   ]
+
+  const customLabel = appliedCustomStart && appliedCustomEnd && filterYear === 'custom'
+    ? `${appliedCustomStart} – ${appliedCustomEnd}`
+    : 'Custom range'
 
   return (
     <>
@@ -80,6 +115,54 @@ export default function Dashboard({ allRuns }: Props) {
             {opt.label}
           </button>
         ))}
+
+        {/* Custom range button + picker */}
+        <div className="relative" ref={pickerRef}>
+          <button
+            onClick={() => setShowCustomPicker((v) => !v)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              filterYear === 'custom'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-white border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-800'
+            }`}
+          >
+            {customLabel}
+          </button>
+
+          {showCustomPicker && (
+            <div className="absolute left-0 top-full mt-2 z-50 bg-white border border-zinc-200 rounded-xl shadow-lg p-4 min-w-[280px]">
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-3">Custom date range</p>
+              <div className="flex flex-col gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-zinc-500">From</span>
+                  <input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="border border-zinc-200 rounded-lg px-3 py-1.5 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-zinc-500">To</span>
+                  <input
+                    type="date"
+                    value={customEnd}
+                    min={customStart}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="border border-zinc-200 rounded-lg px-3 py-1.5 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </label>
+                <button
+                  onClick={handleApplyCustomRange}
+                  disabled={!customStart || !customEnd}
+                  className="mt-1 px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Single row: [KPI1] [KPI2] [Heatmap] */}
