@@ -70,11 +70,11 @@ function activityToRow(a: any): string {
 
 const HEADER = 'Aktivitätstyp,Datum,Favorit,Titel,Distanz,Kalorien,Zeit,Ø Herzfrequenz,Maximale Herzfrequenz,Ø Schrittfrequenz (Laufen),Max. Schrittfrequenz (Laufen),Ø Pace,Beste Pace,Anstieg gesamt,Abstieg gesamt,Ø Schrittlänge,Training Stress Score®,Schritte,Body Battery Abnahme,Dekompression,Beste Rundenzeit,Anzahl der Runden,Zeit in Bewegung,Verstrichene Zeit,Minimale Höhe,Maximale Höhe'
 
-export async function syncGarmin(): Promise<{ count: number }> {
-  const email = process.env.GARMIN_EMAIL
-  const password = process.env.GARMIN_PASSWORD
-  if (!email || !password) throw new Error('Missing GARMIN_EMAIL or GARMIN_PASSWORD in .env')
-
+export async function syncGarmin(
+  email: string,
+  password: string,
+  csvFile: string,
+): Promise<{ count: number }> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { GarminConnect } = require('garmin-connect')
   const client = new GarminConnect({ username: email, password })
@@ -93,6 +93,6 @@ export async function syncGarmin(): Promise<{ count: number }> {
   }
 
   const csv = [HEADER, ...allRuns.map(activityToRow)].join('\n') + '\n'
-  writeFileSync(join(process.cwd(), 'Activities.csv'), csv, 'utf-8')
+  writeFileSync(join(process.cwd(), csvFile), csv, 'utf-8')
   return { count: allRuns.length }
 }

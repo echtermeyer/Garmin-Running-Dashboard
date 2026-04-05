@@ -1,11 +1,23 @@
+import { cookies } from 'next/headers'
 import Dashboard from '@/components/Dashboard'
 import SyncButton from '@/components/SyncButton'
+import LogoutButton from '@/components/LogoutButton'
+import LoginPage from '@/components/LoginPage'
 import { getRuns } from '@/lib/parse.server'
+import { getSessionCsvFile } from '@/lib/sessions'
 
 export const dynamic = 'force-dynamic'
 
 export default function Page() {
-  const allRuns = getRuns()
+  const cookieStore = cookies()
+  const sessionId = cookieStore.get('session')?.value
+  const csvFile = sessionId ? getSessionCsvFile(sessionId) : undefined
+
+  if (!csvFile) {
+    return <LoginPage />
+  }
+
+  const allRuns = getRuns(csvFile)
 
   const dateRange = (() => {
     if (allRuns.length === 0) return ''
@@ -37,8 +49,9 @@ export default function Page() {
                 <p className="text-zinc-500 text-sm font-medium">{dateRange}</p>
               )}
             </div>
-            <div className="pt-1">
+            <div className="pt-1 flex items-center gap-3">
               <SyncButton />
+              <LogoutButton />
             </div>
           </div>
         </div>
@@ -46,9 +59,8 @@ export default function Page() {
         {allRuns.length === 0 ? (
           <div className="rounded-2xl bg-white border border-zinc-200 p-12 text-center">
             <p className="text-zinc-500 text-sm">
-              No running activities found. Make sure{' '}
-              <span className="font-mono text-zinc-700">Activities.csv</span> is in the project
-              root.
+              No running activities found. Click{' '}
+              <span className="font-semibold text-zinc-700">Sync Garmin</span> to fetch your data.
             </p>
           </div>
         ) : (
