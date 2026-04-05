@@ -7,7 +7,9 @@ import WeeklyVolumeChart from './WeeklyVolumeChart'
 import AerobicScatter from './AerobicScatter'
 import HRZoneChart from './HRZoneChart'
 import PaceTrendChart from './PaceTrendChart'
+import ZoneSettingsModal from './ZoneSettingsModal'
 import { computeWeeklyVolume, computeMonthlyVolume, computeCustomRangeVolume, computeRunsByDate, type Run } from '@/lib/data'
+import { type Zone, loadZones } from '@/lib/zones'
 
 interface Props {
   allRuns: Run[]
@@ -41,6 +43,10 @@ export default function Dashboard({ allRuns }: Props) {
   const [appliedCustomStart, setAppliedCustomStart] = useState('')
   const [appliedCustomEnd, setAppliedCustomEnd] = useState('')
   const pickerRef = useRef<HTMLDivElement>(null)
+
+  // HR zone settings
+  const [zones, setZones] = useState<Zone[]>(() => loadZones())
+  const [showZoneSettings, setShowZoneSettings] = useState(false)
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -163,7 +169,28 @@ export default function Dashboard({ allRuns }: Props) {
             </div>
           )}
         </div>
+
+        {/* HR Zone settings button */}
+        <button
+          onClick={() => setShowZoneSettings(true)}
+          title="HR Zone settings"
+          className="ml-auto px-3 py-1.5 rounded-full text-sm font-medium bg-white border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-800 transition-all flex items-center gap-1.5"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+            <path fillRule="evenodd" d="M8.34 1.804A1 1 0 0 1 9.32 1h1.36a1 1 0 0 1 .98.804l.295 1.473c.497.144.971.342 1.416.587l1.25-.834a1 1 0 0 1 1.262.125l.962.962a1 1 0 0 1 .125 1.262l-.834 1.25c.245.445.443.919.587 1.416l1.473.294a1 1 0 0 1 .804.98v1.361a1 1 0 0 1-.804.98l-1.473.295a6.95 6.95 0 0 1-.587 1.416l.834 1.25a1 1 0 0 1-.125 1.262l-.962.962a1 1 0 0 1-1.262.125l-1.25-.834a6.953 6.953 0 0 1-1.416.587l-.294 1.473a1 1 0 0 1-.98.804H9.32a1 1 0 0 1-.98-.804l-.295-1.473a6.957 6.957 0 0 1-1.416-.587l-1.25.834a1 1 0 0 1-1.262-.125l-.962-.962a1 1 0 0 1-.125-1.262l.834-1.25a6.957 6.957 0 0 1-.587-1.416l-1.473-.294A1 1 0 0 1 1 10.68V9.32a1 1 0 0 1 .804-.98l1.473-.295c.144-.497.342-.971.587-1.416l-.834-1.25a1 1 0 0 1 .125-1.262l.962-.962A1 1 0 0 1 5.38 2.03l1.25.834a6.957 6.957 0 0 1 1.416-.587L8.34 1.804ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clipRule="evenodd" />
+          </svg>
+          HR Zones
+        </button>
       </div>
+
+      {/* Zone settings modal */}
+      {showZoneSettings && (
+        <ZoneSettingsModal
+          zones={zones}
+          onClose={() => setShowZoneSettings(false)}
+          onSave={(updated) => setZones(updated)}
+        />
+      )}
 
       {/* Single row: [KPI1] [KPI2] [Heatmap] */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
@@ -190,7 +217,7 @@ export default function Dashboard({ allRuns }: Props) {
 
       {/* Zone distribution + pace trend row */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        <HRZoneChart runs={filteredRuns} />
+        <HRZoneChart runs={filteredRuns} zones={zones} />
         <PaceTrendChart runs={filteredRuns} />
       </section>
     </>

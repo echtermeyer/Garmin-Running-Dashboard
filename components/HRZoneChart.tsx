@@ -3,31 +3,13 @@
 import { motion } from 'framer-motion'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import type { Run } from '@/lib/data'
-
-const ZONES = [
-  { key: 'z1', label: 'Z1 Recovery',   maxHR: 125, color: '#bfdbfe' },
-  { key: 'z2', label: 'Z2 Base',       maxHR: 145, color: '#6ee7b7' },
-  { key: 'z3', label: 'Z3 Aerobic',    maxHR: 160, color: '#fde68a' },
-  { key: 'z4', label: 'Z4 Threshold',  maxHR: 175, color: '#fdba74' },
-  { key: 'z5', label: 'Z5 Max',        maxHR: Infinity, color: '#fca5a5' },
-]
-
-function zoneOf(avgHR: number): number {
-  for (let i = 0; i < ZONES.length; i++) {
-    if (avgHR < ZONES[i].maxHR) return i
-  }
-  return ZONES.length - 1
-}
-
-type Entry = {
-  month: string
-  z1: number | null; z2: number | null; z3: number | null
-  z4: number | null; z5: number | null
-}
+import { type Zone, zoneOf, zoneThresholdLabel } from '@/lib/zones'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function buildData(runs: Run[]): Entry[] {
+type Entry = { month: string } & Record<string, string | number | null>
+
+function buildData(runs: Run[], zones: Zone[]): Entry[] {
   if (!runs.length) return []
 
   const map = new Map<string, Run[]>()
@@ -51,33 +33,44 @@ function buildData(runs: Run[]): Entry[] {
     const monthRuns = map.get(k)
 
     if (!monthRuns?.length) {
-      result.push({ month: label, z1: null, z2: null, z3: null, z4: null, z5: null })
+      const empty: Entry = { month: label }
+      zones.forEach((z) => { empty[z.key] = null })
+      result.push(empty)
     } else {
-      const zonekm = [0, 0, 0, 0, 0]
+      const zonekm = zones.map(() => 0)
       let total = 0
       for (const r of monthRuns) {
-        zonekm[zoneOf(r.avgHR)] += r.distance
+        zonekm[zoneOf(r.avgHR, zones)] += r.distance
         total += r.distance
       }
       const pcts = zonekm.map(km => Math.round((km / total) * 100))
       const diff = 100 - pcts.reduce((a, b) => a + b, 0)
       pcts[pcts.indexOf(Math.max(...pcts))] += diff
-      result.push({ month: label, z1: pcts[0], z2: pcts[1], z3: pcts[2], z4: pcts[3], z5: pcts[4] })
+      const entry: Entry = { month: label }
+      zones.forEach((z, i) => { entry[z.key] = pcts[i] })
+      result.push(entry)
     }
     m++; if (m > 12) { m = 1; y++ }
   }
   return result
 }
 
-function ZoneTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: Entry }[]; label?: string }) {
+function ZoneTooltip({
+  active, payload, label, zones,
+}: {
+  active?: boolean
+  payload?: { payload: Entry }[]
+  label?: string
+  zones: Zone[]
+}) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
-  if (d.z1 === null) return null
+  if (d[zones[0].key] === null) return null
   return (
     <div className="bg-white border border-zinc-200 rounded-xl px-4 py-3 shadow-md min-w-[160px]">
       <p className="text-xs font-medium tracking-widest uppercase text-zinc-500 mb-2">{label}</p>
-      {[...ZONES].reverse().map((zone) => {
-        const v = d[zone.key as keyof Entry] as number | null
+      {[...zones].reverse().map((zone) => {
+        const v = d[zone.key] as number | null
         if (!v) return null
         return (
           <div key={zone.key} className="flex items-center gap-2 text-xs mb-0.5">
@@ -91,8 +84,13 @@ function ZoneTooltip({ active, payload, label }: { active?: boolean; payload?: {
   )
 }
 
-export default function HRZoneChart({ runs }: { runs: Run[] }) {
-  const data = buildData(runs)
+export default function HRZoneChart({ runs, zones }: { runs: Run[]; zones: Zone[] }) {
+  const data = buildData(runs, zones)
+
+  const subtitleParts = zones.map((z, i) => {
+    const thr = zoneThresholdLabel(zones, i)
+    return `${z.label.split(' ')[0]} ${thr}`
+  })
 
   return (
     <motion.div
@@ -107,7 +105,7 @@ export default function HRZoneChart({ runs }: { runs: Run[] }) {
       </p>
       <p className="text-base font-semibold text-zinc-800 mb-1">Monthly Zone Distribution</p>
       <p className="text-xs text-zinc-500 mb-5">
-        % of km per zone &middot; Z1 &lt;120 &middot; Z2 120–145 &middot; Z3 145–160 &middot; Z4 160–175 &middot; Z5 &gt;175 bpm
+        % of km per zone &middot; {subtitleParts.join(' · ')} bpm
       </p>
 
       <ResponsiveContainer width="100%" height={220}>
@@ -131,8 +129,11 @@ export default function HRZoneChart({ runs }: { runs: Run[] }) {
             tickLine={false}
             width={36}
           />
-          <Tooltip content={<ZoneTooltip />} cursor={{ stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }} />
-          {ZONES.map((zone) => (
+          <Tooltip
+            content={<ZoneTooltip zones={zones} />}
+            cursor={{ stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }}
+          />
+          {zones.map((zone) => (
             <Area
               key={zone.key}
               type="monotone"
@@ -148,10 +149,12 @@ export default function HRZoneChart({ runs }: { runs: Run[] }) {
       </ResponsiveContainer>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
-        {ZONES.map((zone) => (
+        {zones.map((zone, i) => (
           <div key={zone.key} className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: zone.color }} />
-            <span className="text-[10px] text-zinc-500">{zone.label}</span>
+            <span className="text-[10px] text-zinc-500">
+              {zone.label} <span className="text-zinc-400">{zoneThresholdLabel(zones, i)}</span>
+            </span>
           </div>
         ))}
       </div>
